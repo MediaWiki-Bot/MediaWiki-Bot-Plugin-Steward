@@ -4,8 +4,8 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 BEGIN{push @INC, "./lib"}
 WriteMakefile(
-    NAME              => 'MediaWiki::Bot::Plugin::PLUGINNAME',
-    VERSION_FROM      => 'lib/MediaWiki/Bot/Plugin/PLUGINNAME.pm', # finds $VERSION
+    NAME              => 'MediaWiki::Bot::Plugin::Steward',
+    VERSION_FROM      => 'lib/MediaWiki/Bot/Plugin/Steward.pm', # finds $VERSION
     PREREQ_PM         => { WWW::Mechanize => '1.30',
 			   HTML::Entities => 1.35,
 			   URI::Escape    => 3.28,
@@ -13,7 +13,7 @@ WriteMakefile(
 			   Carp 	       => 0,
 			   MediaWiki::Bot => '1.5.2'},
 	 ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
-	 (ABSTRACT_FROM    => 'lib/MediaWiki/Bot/Plugin/PLUGINNAME.pm', # retrieve abstract from module
+	 (ABSTRACT_FROM    => 'lib/MediaWiki/Bot/Plugin/Steward.pm', # retrieve abstract from module
     AUTHOR            => 'Dan Collins (ST47)') : () ),
     LICENSE           => 'gpl',
 );

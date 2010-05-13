@@ -4,7 +4,7 @@ Makefile.PL
 MANIFEST
 README
 CHANGES
-lib/MediaWiki/Bot/Plugin/PLUGINNAME.pm
+lib/MediaWiki/Bot/Plugin/Steward.pm
 gpl.txt
 t/00_initialize.t
 t/97_pod.t
