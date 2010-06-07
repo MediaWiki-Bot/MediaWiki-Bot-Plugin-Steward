@@ -1,57 +1,248 @@
 package MediaWiki::Bot::Plugin::Steward;
+use strict;
+use warnings;
+
 use locale;
 use POSIX qw(locale_h);
 setlocale(LC_ALL, "en_US.UTF-8");
-use strict;
+use Carp;
+use Net::CIDR qw(range2cidr cidrlookup cidrvalidate);
+use URI::Escape qw(uri_escape_utf8);
 
-our $VERSION = '0.2.1';
+our $VERSION = '0.0.1';
 
 =head1 NAME
 
-MediaWiki::Bot::Plugin::Steward
+MediaWiki::Bot::Plugin::Steward - A plugin to MediaWiki::Bot providing steward functions
 
 =head1 SYNOPSIS
 
 use MediaWiki::Bot;
 
-my $editor = MediaWiki::Bot->new('Account');
-$editor->login('Account', 'password');
+my $bot = MediaWiki::Bot->new({
+    operator    => 'Mike.lifeguard',
+    assert      => 'bot',
+    protocol    => 'https',
+    host        => 'secure.wikimedia.org',
+    path        => 'wikipedia/meta/w',
+    login_data  => { username => "Mike.lifeguard", password => $pass },
+});
+$bot->global_block({
+    ip => '127.0.0.1',
+    ao => 0,
+    summary => 'bloody vandals...',
+});
 
 =head1 DESCRIPTION
 
-MediaWiki::Bot is a framework that can be used to write Wikipedia bots.
+A plugin to the MediaWiki::Bot framework to provide steward functions to a bot.
 
 =head1 AUTHOR
 
-The Perlwikipedia team
+Mike.lifeguard and the MediaWiki::Bot team (Alex Rowe, Jmax, Oleg Alexandrov, Dan Collins and others).
 
 =head1 METHODS
 
+=head2 import()
+
+Calling import from any module will, quite simply, transfer these subroutines into that module's namespace. This is possible from any module which is compatible with MediaWiki::Bot.
+
+=cut
+
+use Exporter qw(import);
+our @EXPORT = qw(g_block g_unblock _screenscrape_get _screenscrape_put);
+
+=head2 g_block($data_hashref)
+
+This places a global block on an IP or IP range. You can provide either CIDR or classful ranges. To easily place a vandalism block, pass just the IP.
+
 =over 4
 
-=item import()
+=item *
+ip - the IP or IP range to block. Use a single IP, CIDR range, or classful range.
 
-Calling import from any module will, quite simply, transfer these subroutines into that module's namespace. This is possible from any module which is compatible with MediaWiki/Bot.pm.
+=item *
+ao - whether to block anon-only; default is true.
+
+=item *
+reason - the log summary. Default is 'cross-wiki abuse'.
+
+=item *
+expiry - the expiry setting. Default is 31 hours.
+
+=back
+
+    $bot->g_block({
+        ip     => '127.0.0.1',
+        ao     => 0,
+        reason => 'silly vandals',
+    });
+
+    # Or, use defaults
+    $bot->g_block('127.0.0.0-127.0.0.255');
 
 =cut
 
-sub import {
-	no strict 'refs';
-	foreach my $method (qw/sample_steward/) {
-		*{caller() . "::$method"} = \&{$method};
-	}
+sub g_block {
+    my $self   = shift;
+    my $ip     = ref $_[0] eq 'HASH' ? $_[0]->{'ip'} : shift; # Allow giving just an IP
+    my $ao     = exists($_[0]->{'ao'}) ? $_[0]->{'ao'} : 0;
+    my $reason = $_[0]->{'reason'} || 'cross-wiki abuse';
+    my $expiry = $_[0]->{'expiry'} || '31 hours';
+
+    my $start;
+    if ($ip =~ m/-/) {
+        $start = (split(/\-/, $ip, 2))[0];
+        $ip = range2cidr($start);
+    }
+    elsif ($ip =~ m,/\d\d$,) {
+        $start = $ip;
+        $start =~ s,/\d\d$,,;
+    }
+    carp "Invalid IP $ip" unless ($ip =~ m,/\d\d$, || cidrvalidate($ip));
+
+    my $opts = {
+        'wpAddress'     => $ip,     # mw-globalblock-address
+        'wpExpiryOther' => $expiry, # mw-globalblock-expiry-other
+        'wpReason'      => $reason, # mw-globalblock-reason
+        'wpAnonOnly'    => $ao,     # mw-globalblock-anon-only
+    };
+    my $res = $self->_screenscrape_put('Special:GlobalBlock', $opts);
+    if ($res->decoded_content() =~ m/class="error"/) {
+        carp _screenscrape_error($res->decoded_content());
+        return;
+    }
+
+    return 1;
 }
 
-=item sample_steward($arg)
+=head2 g_unblock($data)
 
+Remove the global block affecting an IP or range. The hashref is:
+
+=over 4
+
+=item *
+ip - the IP or range to unblock. You don't need to convert your range into a CIDR, just pass in your range in xxx.xxx.xxx.xxx-yyy.yyy.yyy.yyy format and let this method do the work.
+
+=item *
+reason - the log reason.
+
+=back
+
+If you pass only the IP, a generic reason will be used.
+
+    $bot->g_unblock({
+        ip      => '127.0.0.0-127.0.0.255',
+        reason  => 'oops',
+    });
+    # Or
+    $bot->g_unblock('127.0.0.1');
 
 =cut
 
-sub sample_steward {
-	my $self    = shift;
+sub g_unblock {
+    my $self   = shift;
+    my $ip     = ref $_[0] eq 'HASH' ? $_[0]->{'ip'} : shift;
+    my $reason = $_[0]->{'reason'} || 'Removing obsolete block';
 
-	return;
+    my $start;
+    if ($ip =~ m/-/) {
+        $start = (split(/\-/, $ip, 2))[0];
+        $ip = range2cidr($start);
+    }
+    elsif ($ip =~ m,/\d\d$,) {
+        $start = $ip;
+        $start =~ s,/\d\d$,,;
+    }
+    carp "Invalid IP $ip" unless ($ip =~ m,/\d\d$, || cidrvalidate($ip));
+    if ($start) {
+        # When rangeblocks are placed, the CIDR gets normalized - so you cannot unblock
+        # the same range you blocked. You'll need to do some kind of lookup. Probably,
+        # you can convert CIDR to A-B range, take the first IP, see whether it is blocked
+        # and what rangeblock affects it, then unblock that.
+
+        $ip = $self->find_global_rangeblock($start);
+        unless ($ip) {
+            carp "Couldn't find the matching rangeblock";
+            return;
+        }
+    }
+
+    my $opts = {
+        'address'   => $ip,
+        'wpReason'  => $reason,
+    };
+    my $res = $self->_screenscrape_put('Special:GlobalUnblock', $opts);
+
+    if ($res->decoded_content() =~ m/class="error"/) {
+        carp _screenscrape_error($res->decoded_content());
+        return;
+    }
+
+    return 1;
 }
+
+
+################
+# Internal use #
+################
+
+# Submits a form screenscrape-style (barf!)
+sub _screenscrape_put {
+    my $self    = shift;
+    my $page    = shift;
+    my $options = shift;
+
+    my $res     = $self->_screenscrape_get($page);
+    return unless (ref($res) eq 'HTTP::Response' && $res->is_success);
+
+    $res = $self->{mech}->submit_form(
+        with_fields => $options,
+    );
+
+    return $res;
+}
+
+# Gets a page screenscrape-style (barf!)
+sub _screenscrape_get {
+    my $self      = shift;
+    my $page      = shift;
+    my $extra     = shift || '&uselang=en&useskin=monobook';
+    my $no_escape = shift || 0;
+
+    $page = uri_escape_utf8($page) unless $no_escape;
+
+    my $url = "http://$self->{host}/$self->{path}/index.php?title=$page";
+    $url .= $extra if $extra;
+    print "Retrieving $url\n" if $self->{debug};
+
+    my $res = $self->{mech}->get($url);
+    return unless (ref($res) eq 'HTTP::Response' && $res->is_success());
+
+    if ( $res->decoded_content() =~ m/class="error"/) {
+        carp _screenscrape_error($res->decoded_content());
+        return;
+    }
+
+    return $res;
+}
+
+# Returns the text of the first div with class 'error'
+sub _screenscrape_error {
+    my $html = shift;
+
+    require HTML::TreeBuilder;
+    my $tree = HTML::TreeBuilder->new_from_content($html);
+    my $error = $tree->look_down(
+        '_tag', 'div',
+        'class', 'error'
+    );
+
+    return $error->as_text();
+}
+
 
 1;
 
+__END__

@@ -3,17 +3,20 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 BEGIN{push @INC, "./lib"}
+
 WriteMakefile(
-    NAME              => 'MediaWiki::Bot::Plugin::Steward',
-    VERSION_FROM      => 'lib/MediaWiki/Bot/Plugin/Steward.pm', # finds $VERSION
-    PREREQ_PM         => { WWW::Mechanize => '1.30',
-			   HTML::Entities => 1.35,
-			   URI::Escape    => 3.28,
-			   XML::Simple    => 2.16,
-			   Carp 	       => 0,
-			   MediaWiki::Bot => '1.5.2'},
-	 ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
-	 (ABSTRACT_FROM    => 'lib/MediaWiki/Bot/Plugin/Steward.pm', # retrieve abstract from module
-    AUTHOR            => 'Dan Collins (ST47)') : () ),
-    LICENSE           => 'gpl',
+    NAME            => 'MediaWiki::Bot::Plugin::Steward',
+    VERSION_FROM    => 'lib/MediaWiki/Bot/Plugin/Steward.pm', # finds $VERSION
+    PREREQ_PM       => {    WWW::Mechanize  => '1.30',
+                            HTML::Entities  => '1.35',
+                            URI::Escape     => '3.28',
+                            XML::Simple     => '2.16',
+                            Carp            => '0',
+                            MediaWiki::Bot  => '3.2.0',
+                            Net::CIDR       => '0',
+                        },
+    ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
+        (   ABSTRACT_FROM   => 'lib/MediaWiki/Bot/Plugin/Steward.pm', # retrieve abstract from module
+            AUTHOR          => 'Mike.lifeguard and the Perlwikibot team') : () ),
+    LICENSE         => 'gpl',
 );
