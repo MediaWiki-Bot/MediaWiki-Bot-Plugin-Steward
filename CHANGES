@@ -1,7 +1,11 @@
-Revision history for PLUGINNAME
+Revision history for MediaWiki::Bot::Plugin::Stewards
 
-Unreleased version
-	Changes made since CHANGEME:
-		* 
-CHANGEME DCOLLINS December 27 2008
-	* Initial version
+0.0.1:
+mikelifeguard (1):
+      Issue 18: Add support for global (un)blocking in Steward plugin
+
+0.0.0:
+EN.WP.ST47 (2):
+      Add steward base directory
+      Metavariables
+
