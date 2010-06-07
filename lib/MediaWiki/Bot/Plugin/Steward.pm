@@ -6,10 +6,10 @@ use locale;
 use POSIX qw(locale_h);
 setlocale(LC_ALL, "en_US.UTF-8");
 use Carp;
-use Net::CIDR qw(range2cidr cidrlookup cidrvalidate);
+use Net::CIDR qw(range2cidr cidrvalidate);
 use URI::Escape qw(uri_escape_utf8);
 
-our $VERSION = '0.0.1';
+our $VERSION = '0.0.2';
 
 =head1 NAME
 
@@ -126,7 +126,7 @@ Remove the global block affecting an IP or range. The hashref is:
 ip - the IP or range to unblock. You don't need to convert your range into a CIDR, just pass in your range in xxx.xxx.xxx.xxx-yyy.yyy.yyy.yyy format and let this method do the work.
 
 =item *
-reason - the log reason.
+reason - the log reason. Default is 'Removing obsolete block'.
 
 =back
 
@@ -162,7 +162,7 @@ sub g_unblock {
         # you can convert CIDR to A-B range, take the first IP, see whether it is blocked
         # and what rangeblock affects it, then unblock that.
 
-        $ip = $self->find_global_rangeblock($start);
+        $ip = $self->is_g_blocked($start);
         unless ($ip) {
             carp "Couldn't find the matching rangeblock";
             return;

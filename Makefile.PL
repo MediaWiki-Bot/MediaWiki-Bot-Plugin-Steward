@@ -12,7 +12,7 @@ WriteMakefile(
                             URI::Escape     => '3.28',
                             XML::Simple     => '2.16',
                             Carp            => '0',
-                            MediaWiki::Bot  => '3.2.0',
+                            MediaWiki::Bot  => '3.2.1',
                             Net::CIDR       => '0',
                         },
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
