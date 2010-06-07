@@ -50,7 +50,7 @@ Calling import from any module will, quite simply, transfer these subroutines in
 =cut
 
 use Exporter qw(import);
-our @EXPORT = qw(g_block g_unblock _screenscrape_get _screenscrape_put);
+our @EXPORT = qw(g_block g_unblock ca_lock ca_unlock _screenscrape_get _screenscrape_put);
 
 =head2 g_block($data_hashref)
 
@@ -181,6 +181,81 @@ sub g_unblock {
     }
 
     return 1;
+}
+
+=head2 ca_lock($data)
+
+Locks and hides a user with CentralAuth. $data is a hash:
+
+=over 4
+
+=item *
+user - the user to target
+
+=item *
+lock - whether to lock or unlock the account - default is lock (0, 1)
+
+=item *
+hide - how hard to hide the account - default is not at all (0, 1, 2)
+
+=item *
+reason - default is 'cross-wiki abuse'
+
+=over
+
+If you pass in only a username, the account will be locked but not hidden, and the default reason will be used:
+
+    $bot->ca_lock("Mike.lifeguard");
+    # Or, the more complete call:
+    $bot->ca_lock({
+        user    => "Mike.lifeguard",
+        reason  => "test",
+    });
+
+=cut
+
+sub ca_lock {
+    my $self   = shift;
+    my $user   = ref $_[0] eq 'HASH' ? $_[0]->{'user'} : shift;
+    my $hide   = $_[0]->{'hide'} || 0;
+    my $reason = $_[0]->{'reason'} || 'cross-wiki abuse';
+    my $lock   = defined($_[0]->{'lock'}) ? $_[0]->{'lock'} : 1;
+
+    $user =~ s/^User://i;
+    my $opts = {
+#        target          => $user,
+        wpStatusLocked  => $lock,
+        wpStatusHidden  => $hide,
+        wpReason        => $reason,
+    };
+    my $res = $self->_screenscrape_put("Special:CentralAuth/$user", $opts);
+    if ($res->decoded_content() =~ m/class="error"/) {
+        carp _screenscrape_error($res->decoded_content());
+        return;
+    }
+
+    return $res;
+}
+
+=head2 ca_unlock($data)
+
+Same parameters as ca_lock(), but with the default setting for lock reversed (ie, default is I<unlock>).
+
+=cut
+
+sub ca_unlock {
+    my $self = shift;
+    my $user = ref $_[0] eq 'HASH' ? $_[0]->{'user'} : shift;
+    my $hide = $_[0]->{'hide'} || 0;
+    my $reason = $_[0]->{'reason'} || 'Removing obsolete account lock';
+    my $lock = defined($_[0]->{'lock'}) ? $_[0]->{'lock'} : 0;
+
+    return $self->ca_lock({
+        user    => $user,
+        hide    => $hide,
+        reason  => $reason,
+        lock    => $lock,
+    });
 }
 
 
