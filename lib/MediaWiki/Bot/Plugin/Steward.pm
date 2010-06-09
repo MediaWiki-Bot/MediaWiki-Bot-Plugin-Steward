@@ -228,7 +228,9 @@ sub ca_lock {
         wpStatusHidden  => $hide,
         wpReason        => $reason,
     };
-    my $res = $self->_screenscrape_put("Special:CentralAuth/$user", $opts);
+
+    $user =~ s/ /_/g; # Any further normalization needed?
+    my $res = $self->_screenscrape_put("Special:CentralAuth&target=$user", $opts, 1);
     if ($res->decoded_content() =~ m/class="error"/) {
         carp _screenscrape_error($res->decoded_content());
         return;
@@ -268,8 +270,10 @@ sub _screenscrape_put {
     my $self    = shift;
     my $page    = shift;
     my $options = shift;
+    my $no_esc  = shift;
+    my $extra   = shift;
 
-    my $res     = $self->_screenscrape_get($page);
+    my $res     = $self->_screenscrape_get($page, $no_esc, $extra);
     return unless (ref($res) eq 'HTTP::Response' && $res->is_success);
 
     $res = $self->{mech}->submit_form(
@@ -283,14 +287,13 @@ sub _screenscrape_put {
 sub _screenscrape_get {
     my $self      = shift;
     my $page      = shift;
-    my $extra     = shift || '&uselang=en&useskin=monobook';
     my $no_escape = shift || 0;
+    my $extra     = shift || '&uselang=en&useskin=monobook';
 
     $page = uri_escape_utf8($page) unless $no_escape;
 
     my $url = "http://$self->{host}/$self->{path}/index.php?title=$page";
     $url .= $extra if $extra;
-    print "Retrieving $url\n" if $self->{debug};
 
     my $res = $self->{mech}->get($url);
     return unless (ref($res) eq 'HTTP::Response' && $res->is_success());
