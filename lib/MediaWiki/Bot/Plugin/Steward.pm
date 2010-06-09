@@ -9,7 +9,7 @@ use Carp;
 use Net::CIDR qw(range2cidr cidrvalidate);
 use URI::Escape qw(uri_escape_utf8);
 
-our $VERSION = '0.0.2';
+our $VERSION = '0.0.3';
 
 =head1 NAME
 
@@ -222,9 +222,17 @@ sub ca_lock {
     my $reason = $_[0]->{'reason'} || 'cross-wiki abuse';
     my $lock   = defined($_[0]->{'lock'}) ? $_[0]->{'lock'} : 1;
 
+    if ($hide == 0) {
+        $hide = '';
+    }
+    elsif ($hide == 1) {
+        $hide = 'lists';
+    }
+    elsif ($hide == 2) {
+        $hide = 'suppressed';
+    }
     $user =~ s/^User://i;
     my $opts = {
-#        target          => $user,
         wpStatusLocked  => $lock,
         wpStatusHidden  => $hide,
         wpReason        => $reason,
