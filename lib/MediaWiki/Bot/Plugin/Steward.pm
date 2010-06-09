@@ -9,7 +9,7 @@ use Carp;
 use Net::CIDR qw(range2cidr cidrvalidate);
 use URI::Escape qw(uri_escape_utf8);
 
-our $VERSION = '0.0.3';
+our $VERSION = '0.0.4';
 
 =head1 NAME
 
@@ -85,11 +85,12 @@ expiry - the expiry setting. Default is 31 hours.
 =cut
 
 sub g_block {
-    my $self   = shift;
-    my $ip     = ref $_[0] eq 'HASH' ? $_[0]->{'ip'} : shift; # Allow giving just an IP
-    my $ao     = exists($_[0]->{'ao'}) ? $_[0]->{'ao'} : 0;
-    my $reason = $_[0]->{'reason'} || 'cross-wiki abuse';
-    my $expiry = $_[0]->{'expiry'} || '31 hours';
+    my $self    = shift;
+    my $ip      = ref $_[0] eq 'HASH' ? $_[0]->{'ip'} : shift; # Allow giving just an IP
+    my $ao      = exists($_[0]->{'ao'}) ? $_[0]->{'ao'} : 0;
+    my $reason  = $_[0]->{'reason'} || 'cross-wiki abuse';
+    my $expiry  = $_[0]->{'expiry'} || '31 hours';
+    my $clobber = exists($_[0]->{'clobber'}) ? $_[0]->{'clobber'} : 1;
 
     my $start;
     if ($ip =~ m/-/) {
@@ -110,8 +111,16 @@ sub g_block {
     };
     my $res = $self->_screenscrape_put('Special:GlobalBlock', $opts, 1);
     if ($res->decoded_content() =~ m/class="error"/) {
-        carp _screenscrape_error($res->decoded_content());
-        return;
+        if ($clobber and $res->decoded_content() =~ 'already blocked globally') {
+            # Resubmit unless noclobber
+            $res = $self->{mech}->submit_form(
+                with_fields => $opts,
+            );
+        }
+        else {
+            carp _screenscrape_error($res->decoded_content());
+            return;
+        }
     }
 
     return $res;
