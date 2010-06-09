@@ -19,19 +19,19 @@ MediaWiki::Bot::Plugin::Steward - A plugin to MediaWiki::Bot providing steward f
 
 use MediaWiki::Bot;
 
-my $bot = MediaWiki::Bot->new({
-    operator    => 'Mike.lifeguard',
-    assert      => 'bot',
-    protocol    => 'https',
-    host        => 'secure.wikimedia.org',
-    path        => 'wikipedia/meta/w',
-    login_data  => { username => "Mike.lifeguard", password => $pass },
-});
-$bot->global_block({
-    ip => '127.0.0.1',
-    ao => 0,
-    summary => 'bloody vandals...',
-});
+    my $bot = MediaWiki::Bot->new({
+        operator    => 'Mike.lifeguard',
+        assert      => 'bot',
+        protocol    => 'https',
+        host        => 'secure.wikimedia.org',
+        path        => 'wikipedia/meta/w',
+        login_data  => { username => "Mike.lifeguard", password => $pass },
+    });
+    $bot->g_block({
+        ip => '127.0.0.1',
+        ao => 0,
+        summary => 'bloody vandals...',
+    });
 
 =head1 DESCRIPTION
 
@@ -76,6 +76,7 @@ expiry - the expiry setting. Default is 31 hours.
         ip     => '127.0.0.1',
         ao     => 0,
         reason => 'silly vandals',
+        expiry => '1 week',
     });
 
     # Or, use defaults
@@ -107,13 +108,13 @@ sub g_block {
         'wpReason'      => $reason, # mw-globalblock-reason
         'wpAnonOnly'    => $ao,     # mw-globalblock-anon-only
     };
-    my $res = $self->_screenscrape_put('Special:GlobalBlock', $opts);
+    my $res = $self->_screenscrape_put('Special:GlobalBlock', $opts, 1);
     if ($res->decoded_content() =~ m/class="error"/) {
         carp _screenscrape_error($res->decoded_content());
         return;
     }
 
-    return 1;
+    return $res;
 }
 
 =head2 g_unblock($data)
@@ -173,7 +174,7 @@ sub g_unblock {
         'address'   => $ip,
         'wpReason'  => $reason,
     };
-    my $res = $self->_screenscrape_put('Special:GlobalUnblock', $opts);
+    my $res = $self->_screenscrape_put('Special:GlobalUnblock', $opts, 1);
 
     if ($res->decoded_content() =~ m/class="error"/) {
         carp _screenscrape_error($res->decoded_content());
@@ -294,6 +295,7 @@ sub _screenscrape_get {
 
     my $url = "http://$self->{host}/$self->{path}/index.php?title=$page";
     $url .= $extra if $extra;
+    print "Retrieving $url\n" if $self->{debug};
 
     my $res = $self->{mech}->get($url);
     return unless (ref($res) eq 'HTTP::Response' && $res->is_success());
