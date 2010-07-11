@@ -211,7 +211,7 @@ hide - how hard to hide the account - default is not at all (0, 1, 2)
 =item *
 reason - default is 'cross-wiki abuse'
 
-=over
+=back
 
 If you pass in only a username, the account will be locked but not hidden, and the default reason will be used:
 
