@@ -9,7 +9,7 @@ use Carp;
 use Net::CIDR qw(range2cidr cidrvalidate);
 use URI::Escape qw(uri_escape_utf8);
 
-our $VERSION = '0.0.4';
+our $VERSION = '0.0.5';
 
 =head1 NAME
 
@@ -203,10 +203,10 @@ Locks and hides a user with CentralAuth. $data is a hash:
 user - the user to target
 
 =item *
-lock - whether to lock or unlock the account - default is lock (0, 1)
+lock - whether to lock or unlock the account - default is lock (0=unlocked, 1=locked)
 
 =item *
-hide - how hard to hide the account - default is not at all (0, 1, 2)
+hide - how hard to hide the account - default is not at all (0=none, 1=lists, 2=oversight)
 
 =item *
 reason - default is 'cross-wiki abuse'
@@ -241,14 +241,21 @@ sub ca_lock {
         $hide = 'suppressed';
     }
     $user =~ s/^User://i;
-    my $opts = {
-        wpStatusLocked  => $lock,
-        wpStatusHidden  => $hide,
-        wpReason        => $reason,
-    };
+    $user =~ s/\@global$//i;
 
-    $user =~ s/ /_/g; # Any further normalization needed?
-    my $res = $self->_screenscrape_put("Special:CentralAuth&target=$user", $opts, 1);
+    my $res = $self->_screenscrape_put("Special:CentralAuth", {target=>$user}, 1);
+    if ($res->decoded_content() =~ m/class="error"/) {
+        carp _screenscrape_error($res->decoded_content());
+        return;
+    }
+
+    $res = $self->{'mech'}->submit_form(
+        with_fields => {
+            wpStatusLocked  => $lock,
+            wpStatusHidden  => $hide,
+            wpReason        => $reason,
+        },
+    );
     if ($res->decoded_content() =~ m/class="error"/) {
         carp _screenscrape_error($res->decoded_content());
         return;
