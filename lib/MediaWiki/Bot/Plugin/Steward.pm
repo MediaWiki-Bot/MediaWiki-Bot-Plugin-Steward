@@ -50,7 +50,7 @@ Calling import from any module will, quite simply, transfer these subroutines in
 =cut
 
 use Exporter qw(import);
-our @EXPORT = qw(g_block g_unblock ca_lock ca_unlock _screenscrape_get _screenscrape_put);
+our @EXPORT = qw(g_block g_unblock ca_lock ca_unlock _screenscrape_get _screenscrape_put _screenscrape_error);
 
 =head2 g_block($data_hashref)
 
@@ -101,7 +101,9 @@ sub g_block {
         $start = $ip;
         $start =~ s,/\d\d$,,;
     }
-    carp "Invalid IP $ip" unless ($ip =~ m,/\d\d$, || cidrvalidate($ip));
+    unless ($ip =~ m,/\d\d$, || cidrvalidate($ip)) {
+        carp "Invalid IP $ip" if $self->{'debug'};
+    }
 
     my $opts = {
         'wpAddress'     => $ip,     # mw-globalblock-address
@@ -118,7 +120,8 @@ sub g_block {
             );
         }
         else {
-            carp _screenscrape_error($res->decoded_content());
+            my $error = $self->_screenscrape_error($res->decoded_content());
+            carp $error if $self->{'debug'};
             return;
         }
     }
@@ -165,7 +168,10 @@ sub g_unblock {
         $start = $ip;
         $start =~ s,/\d\d$,,;
     }
-    carp "Invalid IP $ip" unless ($ip =~ m,/\d\d$, || cidrvalidate($ip));
+    unless ($ip =~ m,/\d\d$, || cidrvalidate($ip)) {
+        carp "Invalid IP $ip" if $self->{'debug'};
+    }
+
     if ($start) {
         # When rangeblocks are placed, the CIDR gets normalized - so you cannot unblock
         # the same range you blocked. You'll need to do some kind of lookup. Probably,
@@ -174,7 +180,7 @@ sub g_unblock {
 
         $ip = $self->is_g_blocked($start);
         unless ($ip) {
-            carp "Couldn't find the matching rangeblock";
+            carp "Couldn't find the matching rangeblock" if $self->{'debug'};
             return;
         }
     }
@@ -186,7 +192,8 @@ sub g_unblock {
     my $res = $self->_screenscrape_put('Special:GlobalUnblock', $opts, 1);
 
     if ($res->decoded_content() =~ m/class="error"/) {
-        carp _screenscrape_error($res->decoded_content());
+        my $error = $self->_screenscrape_error($res->decoded_content());
+        carp $error if $self->{'debug'};
         return;
     }
 
@@ -245,7 +252,8 @@ sub ca_lock {
 
     my $res = $self->_screenscrape_put("Special:CentralAuth", {target=>$user}, 1);
     if ($res->decoded_content() =~ m/class="error"/) {
-        carp _screenscrape_error($res->decoded_content());
+        my $error = $self->_screenscrape_error($res->decoded_content());
+        carp $error if $self->{'debug'};
         return;
     }
 
@@ -257,7 +265,8 @@ sub ca_lock {
         },
     );
     if ($res->decoded_content() =~ m/class="error"/) {
-        carp _screenscrape_error($res->decoded_content());
+        my $error = $self->_screenscrape_error($res->decoded_content());
+        carp $error if $self->{'debug'};
         return;
     }
 
@@ -325,7 +334,8 @@ sub _screenscrape_get {
     return unless (ref($res) eq 'HTTP::Response' && $res->is_success());
 
     if ( $res->decoded_content() =~ m/class="error"/) {
-        carp _screenscrape_error($res->decoded_content());
+        my $error = $self->_screenscrape_error($res->decoded_content());
+        carp $error if $self->{'debug'};
         return;
     }
 
@@ -334,6 +344,7 @@ sub _screenscrape_get {
 
 # Returns the text of the first div with class 'error'
 sub _screenscrape_error {
+    my $self = shift;
     my $html = shift;
 
     require HTML::TreeBuilder;
@@ -343,7 +354,10 @@ sub _screenscrape_error {
         'class', 'error'
     );
 
-    return $error->as_text();
+    my $error_text = $error->as_text();
+    $self->{'error'}->{'details'} = $error_text;
+    $self->{'error'}->{'code'}   = 3;
+    return $error_text;
 }
 
 
