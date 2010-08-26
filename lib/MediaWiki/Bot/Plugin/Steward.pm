@@ -1,24 +1,20 @@
 package MediaWiki::Bot::Plugin::Steward;
+# ABSTRACT: A plugin to MediaWiki::Bot providing steward functions
+
 use strict;
 use warnings;
 
-use locale;
-use POSIX qw(locale_h);
-setlocale(LC_ALL, "en_US.UTF-8");
 use Carp;
 use Net::CIDR qw(range2cidr cidrvalidate);
 use URI::Escape qw(uri_escape_utf8);
+use WWW::Mechanize 1.30;
 
-our $VERSION = '0.0.5';
+our $VERSION = 0.0001;
 
-=head1 NAME
-
-MediaWiki::Bot::Plugin::Steward - A plugin to MediaWiki::Bot providing steward functions
 
 =head1 SYNOPSIS
 
-use MediaWiki::Bot;
-
+    use MediaWiki::Bot;
     my $bot = MediaWiki::Bot->new({
         operator    => 'Mike.lifeguard',
         assert      => 'bot',
@@ -37,10 +33,6 @@ use MediaWiki::Bot;
 
 A plugin to the MediaWiki::Bot framework to provide steward functions to a bot.
 
-=head1 AUTHOR
-
-Mike.lifeguard and the MediaWiki::Bot team (Alex Rowe, Jmax, Oleg Alexandrov, Dan Collins and others).
-
 =head1 METHODS
 
 =head2 import()
@@ -50,7 +42,38 @@ Calling import from any module will, quite simply, transfer these subroutines in
 =cut
 
 use Exporter qw(import);
-our @EXPORT = qw(g_block g_unblock ca_lock ca_unlock _screenscrape_get _screenscrape_put _screenscrape_error);
+our @EXPORT = qw(steward_new g_block g_unblock ca_lock ca_unlock _screenscrape_get _screenscrape_put _screenscrape_error _screenscrape_login);
+
+=head2 steward_new($data_hashref)
+
+=cut
+
+sub steward_new {
+    my $self = shift;
+
+    my $mech = WWW::Mechanize->new(
+        onerror     => \&Carp::carp,
+        stack_depth => 1,
+        agent       => $self->{'useragent'},
+    );
+    my $cookies = ".mediawiki-bot-$self->{'username'}-cookies";
+    if (-r $cookies) {
+        $mech->{'cookie_jar'}->load($cookies);
+        $mech->{'cookie_jar'}->{'ignore_discard'} = 1;
+    }
+    else {
+        croak "$cookies doesn't exist or isn't readable";
+    }
+    $self->{'mech'} = $mech;
+
+    my $check_login = $self->_screenscrape_get('Special:BlankPage');
+    if ($check_login->decoded_content() =~ m/wgUserName="\Q$self->{'username'}\E"/) {
+        return 1;
+    }
+    else {
+        croak "Steward plugin couldn't log in";
+    }
+}
 
 =head2 g_block($data_hashref)
 
@@ -115,7 +138,7 @@ sub g_block {
     if ($res->decoded_content() =~ m/class="error"/) {
         if ($clobber and $res->decoded_content() =~ 'already blocked globally') {
             # Resubmit unless noclobber
-            $res = $self->{mech}->submit_form(
+            $res = $self->{'mech'}->submit_form(
                 with_fields => $opts,
             );
         }
@@ -310,7 +333,7 @@ sub _screenscrape_put {
     my $res     = $self->_screenscrape_get($page, $no_esc, $extra);
     return unless (ref($res) eq 'HTTP::Response' && $res->is_success);
 
-    $res = $self->{mech}->submit_form(
+    $res = $self->{'mech'}->submit_form(
         with_fields => $options,
     );
 
@@ -330,10 +353,10 @@ sub _screenscrape_get {
     $url .= $extra if $extra;
     print "Retrieving $url\n" if $self->{debug};
 
-    my $res = $self->{mech}->get($url);
+    my $res = $self->{'mech'}->get($url);
     return unless (ref($res) eq 'HTTP::Response' && $res->is_success());
 
-    if ( $res->decoded_content() =~ m/class="error"/) {
+    if ($res->decoded_content() =~ m/class="error"/) {
         my $error = $self->_screenscrape_error($res->decoded_content());
         carp $error if $self->{'debug'};
         return;

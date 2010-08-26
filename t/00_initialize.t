@@ -1,4 +1,4 @@
-# Before `make install' is performed this script should be runnable with
+ # Before `make install' is performed this script should be runnable with
 # `make test'. After `make install' it should work as `perl MediaWiki::Bot.t'
 
 #########################
@@ -8,7 +8,10 @@ use strict;
 use warnings;
 use Test::More tests => 4;
 
-BEGIN {push @INC, "./lib"; use_ok('MediaWiki::Bot') };
+BEGIN {
+    push @INC, "./lib";
+    use_ok('MediaWiki::Bot');
+}
 
 #########################
 
@@ -19,4 +22,6 @@ my $bot = MediaWiki::Bot->new();
 
 ok(defined $bot, 'new() works');
 isa_ok($bot, 'MediaWiki::Bot', 'Right class');
-can_ok($bot, qw(g_unblock g_block));
+
+my @methods = @MediaWiki::Bot::Plugin::Steward::EXPORT;
+can_ok($bot, @methods);
