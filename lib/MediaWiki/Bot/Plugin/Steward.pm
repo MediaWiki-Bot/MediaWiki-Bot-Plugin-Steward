@@ -9,7 +9,7 @@ use Net::CIDR qw(range2cidr cidrvalidate);
 use URI::Escape qw(uri_escape_utf8);
 use WWW::Mechanize 1.30;
 
-our $VERSION = 0.0002;
+our $VERSION = 0.0003;
 
 
 =head1 SYNOPSIS
